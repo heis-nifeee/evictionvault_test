@@ -1,66 +1,54 @@
-## Foundry
+# Eviction Vault (Refactored)
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Date: March 09, 2026
 
-Foundry consists of:
+This project refactors the original single-file `EvictionVault` into a modular structure and applies immediate mitigation for critical vulnerabilities.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Project Structure
 
-## Documentation
+- `src/EvictionVault.sol`: main vault logic (deposits, withdrawals, claims, emergency flow)
+- `src/interfaces/IEvictionVault.sol`: shared struct and events
+- `src/modules/EvictionAccessControl.sol`: owner/threshold/paused state and modifiers
+- `src/modules/EvictionMultisig.sol`: submit/confirm/timelocked execution for privileged actions
+- `test/EvictionVault.t.sol`: basic passing Foundry tests
 
-https://book.getfoundry.sh/
+## Critical Fixes Implemented
 
-## Usage
+1. `setMerkleRoot` callable by anyone
+- Fixed: `setMerkleRoot(bytes32)` is now `onlySelf`.
+- Effect: Merkle root changes can only happen through the timelocked multisig execution path.
 
-### Build
+2. `emergencyWithdrawAll` public drain
+- Fixed: `emergencyWithdrawAll(address payable)` is now `onlySelf` and requires `paused == true`.
+- Effect: full-balance withdrawals require multisig approval, timelock delay, and paused state.
 
-```shell
-$ forge build
+3. `pause/unpause` single-owner control
+- Fixed: `pause()` and `unpause()` are now `onlySelf`.
+- Effect: pausing and unpausing require multisig confirmations + timelock.
+
+4. `receive()` using `tx.origin`
+- Fixed: `receive()` now credits `balances[msg.sender]`.
+- Effect: no `tx.origin` trust boundary risk.
+
+5. `withdraw` and `claim` using `.transfer`
+- Fixed: replaced with `Address.sendValue` (safe call forwarding gas).
+- Effect: avoids `.transfer` gas stipend fragility and call-failure edge cases.
+
+6. Timelock execution hardening
+- Fixed: execution requires:
+  - tx exists
+  - not already executed
+  - confirmations `>= threshold`
+  - timelock set and elapsed (`executionTime != 0 && block.timestamp >= executionTime`)
+- Effect: privileged operations are delayed and auditable.
+
+## Build and Test
+
+```bash
+forge build
+forge test
 ```
 
-### Test
+## Current Security Posture
 
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+The direct public attack paths from the original monolith are removed. High-impact administrative actions are now restricted to the vault itself and must pass through the timelocked multisig workflow.
