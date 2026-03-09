@@ -1,54 +1,46 @@
-# Eviction Vault (Refactored)
+# EvictionVault re worked on 
 
-Date: March 09, 2026
+## Overview
 
-This project refactors the original single-file `EvictionVault` into a modular structure and applies immediate mitigation for critical vulnerabilities.
+The original EvictionVault contract was a single-file monolithic contract with  vulnerabilities.
+
+This project repaired  the contract into a modular architecture and fix all  vulnerabilities.
+
+## Fixed Vulnerabilities
+
+### 1. setMerkleRoot Callable by Anyone
+Fixed by restricting access with `onlyOwner`.
+
+### 2. emergencyWithdrawAll Public Drain
+Restricted to owners only.
+
+### 3. pause/unpause Single Owner Control
+Access now restricted to owners.
+
+### 4. receive() Uses tx.origin
+Replaced with `msg.sender`.
+
+### 5. withdraw & claim Using transfer
+Replaced `.transfer` with low level `.call`.
+
+### 6. Timelock Execution
+Execution requires:
+
+- threshold confirmations
+- timelock expiration
+
 
 ## Project Structure
 
-- `src/EvictionVault.sol`: main vault logic (deposits, withdrawals, claims, emergency flow)
-- `src/interfaces/IEvictionVault.sol`: shared struct and events
-- `src/modules/EvictionAccessControl.sol`: owner/threshold/paused state and modifiers
-- `src/modules/EvictionMultisig.sol`: submit/confirm/timelocked execution for privileged actions
-- `test/EvictionVault.t.sol`: basic passing Foundry tests
+src/
 
-## Critical Fixes Implemented
+- VaultStorage.sol
+- VaultOwners.sol
+- VaultPause.sol
+- VaultMultisig.sol
+- VaultMerkle.sol
+- EvictionVault.sol
 
-1. `setMerkleRoot` callable by anyone
-- Fixed: `setMerkleRoot(bytes32)` is now `onlySelf`.
-- Effect: Merkle root changes can only happen through the timelocked multisig execution path.
+test/
 
-2. `emergencyWithdrawAll` public drain
-- Fixed: `emergencyWithdrawAll(address payable)` is now `onlySelf` and requires `paused == true`.
-- Effect: full-balance withdrawals require multisig approval, timelock delay, and paused state.
-
-3. `pause/unpause` single-owner control
-- Fixed: `pause()` and `unpause()` are now `onlySelf`.
-- Effect: pausing and unpausing require multisig confirmations + timelock.
-
-4. `receive()` using `tx.origin`
-- Fixed: `receive()` now credits `balances[msg.sender]`.
-- Effect: no `tx.origin` trust boundary risk.
-
-5. `withdraw` and `claim` using `.transfer`
-- Fixed: replaced with `Address.sendValue` (safe call forwarding gas).
-- Effect: avoids `.transfer` gas stipend fragility and call-failure edge cases.
-
-6. Timelock execution hardening
-- Fixed: execution requires:
-  - tx exists
-  - not already executed
-  - confirmations `>= threshold`
-  - timelock set and elapsed (`executionTime != 0 && block.timestamp >= executionTime`)
-- Effect: privileged operations are delayed and auditable.
-
-## Build and Test
-
-```bash
-forge build
-forge test
-```
-
-## Current Security Posture
-
-The direct public attack paths from the original monolith are removed. High-impact administrative actions are now restricted to the vault itself and must pass through the timelocked multisig workflow.
+- EvictionVault.t.sol
